@@ -1,0 +1,107 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated Redtor creator profile, tier status, daily AI quota, and preferences.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID matching document ID" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "email": { "type": "string", "description": "User email address" },
+        "photoUrl": { "type": "string", "description": "Profile avatar URL" },
+        "tier": { "type": "string", "enum": ["PRO", "FREE"], "description": "Subscription tier" },
+        "dailyAiQuotaUsed": { "type": "integer", "description": "AI generations used today" },
+        "dailyAiQuotaLimit": { "type": "integer", "description": "Daily AI generation quota limit" },
+        "autoDeleteCache": { "type": "boolean", "description": "Auto-delete temporary cache toggle" },
+        "preferredColorGrade": { "type": "string", "description": "Default studio color grading preset" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update" }
+      },
+      "required": ["userId", "displayName", "tier", "dailyAiQuotaUsed", "dailyAiQuotaLimit", "autoDeleteCache", "preferredColorGrade", "createdAt", "updatedAt"]
+    },
+    "StudioProject": {
+      "title": "StudioProject",
+      "description": "AI Photo & Video Studio creative job or Text-to-Video storyboard project.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID" },
+        "toolId": { "type": "string", "description": "Studio tool identifier" },
+        "title": { "type": "string", "description": "Project title" },
+        "prompt": { "type": "string", "description": "Creative prompt or enhancement note" },
+        "aiOutput": { "type": "string", "description": "Gemini generated director plan or enhancement report" },
+        "presetTag": { "type": "string", "description": "Effect or LUT preset tag" },
+        "status": { "type": "string", "enum": ["COMPLETED", "RENDERING", "DRAFT"], "description": "Processing status" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update" }
+      },
+      "required": ["userId", "toolId", "title", "prompt", "aiOutput", "presetTag", "status", "createdAt", "updatedAt"]
+    },
+    "DownloadTask": {
+      "title": "DownloadTask",
+      "description": "Universal media link queue entry with format, muxing mode, and AI summary.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID" },
+        "url": { "type": "string", "description": "Media source URL" },
+        "platform": { "type": "string", "enum": ["YOUTUBE", "TIKTOK", "INSTAGRAM", "TWITTER", "DIRECT"], "description": "Detected platform" },
+        "title": { "type": "string", "description": "Media title" },
+        "format": { "type": "string", "enum": ["MP4_4K", "MP4_1080P", "MP3_320"], "description": "Target export format" },
+        "muxingMode": { "type": "string", "enum": ["AUDIO_VIDEO_SYNC", "AUDIO_ONLY", "NO_WATERMARK_CLEAN"], "description": "Audio/video muxing mode" },
+        "status": { "type": "string", "enum": ["READY", "DOWNLOADING", "COMPLETED", "FAILED"], "description": "Queue item status" },
+        "aiSummary": { "type": "string", "description": "Gemini extracted metadata and creator insight" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update" }
+      },
+      "required": ["userId", "url", "platform", "title", "format", "muxingMode", "status", "aiSummary", "createdAt", "updatedAt"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Multi-turn Gemini chatbot message scoped by social platform.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID" },
+        "platform": { "type": "string", "description": "Social platform persona key" },
+        "role": { "type": "string", "enum": ["user", "model"], "description": "Chat turn role" },
+        "content": { "type": "string", "description": "Message text content" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation" }
+      },
+      "required": ["userId", "platform", "role", "content", "createdAt"]
+    },
+    "CreatorAsset": {
+      "title": "CreatorAsset",
+      "description": "Saved output from Smart Script Writer, AI Auto-Subtitles, or AI Trend Radar.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID" },
+        "assetType": { "type": "string", "enum": ["SCRIPT", "SUBTITLES", "TREND_RADAR"], "description": "Creator suite tool category" },
+        "platform": { "type": "string", "description": "Target social platform" },
+        "topic": { "type": "string", "description": "Prompt topic or title" },
+        "content": { "type": "string", "description": "Generated script, subtitle cues, or trend report" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation" }
+      },
+      "required": ["userId", "assetType", "platform", "topic", "content", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user profile, VIP status, quota, and studio preferences"
+    },
+    "/users/{userId}/studioProjects/{projectId}": {
+      "schema": { "$ref": "#/entities/StudioProject" },
+      "description": "User's AI Photo & Video Studio projects"
+    },
+    "/users/{userId}/downloadTasks/{taskId}": {
+      "schema": { "$ref": "#/entities/DownloadTask" },
+      "description": "User's Universal Downloader queue & muxing records"
+    },
+    "/users/{userId}/chatMessages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "User's multi-turn platform chatbot history"
+    },
+    "/users/{userId}/creatorAssets/{assetId}": {
+      "schema": { "$ref": "#/entities/CreatorAsset" },
+      "description": "User's saved scripts, auto-subtitles, and trend radar reports"
+    }
+  }
+}

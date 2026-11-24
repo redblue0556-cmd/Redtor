@@ -1,0 +1,216 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidUserProfile(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120 &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 160)) &&
+             (!('photoUrl' in data) || (data.photoUrl is string && data.photoUrl.size() <= 500)) &&
+             data.tier in ['PRO', 'FREE'] &&
+             data.dailyAiQuotaUsed is int && data.dailyAiQuotaUsed >= 0 && data.dailyAiQuotaUsed <= 1000 &&
+             data.dailyAiQuotaLimit is int && data.dailyAiQuotaLimit >= 1 && data.dailyAiQuotaLimit <= 1000 &&
+             data.autoDeleteCache is bool &&
+             data.preferredColorGrade is string && data.preferredColorGrade.size() >= 1 && data.preferredColorGrade.size() <= 60;
+    }
+
+    function isValidStudioProject(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.toolId is string && data.toolId.size() >= 1 && data.toolId.size() <= 40 &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+             data.prompt is string && data.prompt.size() >= 1 && data.prompt.size() <= 2000 &&
+             data.aiOutput is string && data.aiOutput.size() <= 15000 &&
+             data.presetTag is string && data.presetTag.size() >= 1 && data.presetTag.size() <= 60 &&
+             data.status in ['COMPLETED', 'RENDERING', 'DRAFT'];
+    }
+
+    function isValidDownloadTask(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.url is string && data.url.size() >= 1 && data.url.size() <= 1000 &&
+             data.platform in ['YOUTUBE', 'TIKTOK', 'INSTAGRAM', 'TWITTER', 'DIRECT'] &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+             data.format in ['MP4_4K', 'MP4_1080P', 'MP3_320'] &&
+             data.muxingMode in ['AUDIO_VIDEO_SYNC', 'AUDIO_ONLY', 'NO_WATERMARK_CLEAN'] &&
+             data.status in ['READY', 'DOWNLOADING', 'COMPLETED', 'FAILED'] &&
+             data.aiSummary is string && data.aiSummary.size() <= 4000;
+    }
+
+    function isValidChatMessage(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.platform is string && data.platform.size() >= 1 && data.platform.size() <= 40 &&
+             data.role in ['user', 'model'] &&
+             data.content is string && data.content.size() >= 1 && data.content.size() <= 15000;
+    }
+
+    function isValidCreatorAsset(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.assetType in ['SCRIPT', 'SUBTITLES', 'TREND_RADAR'] &&
+             data.platform is string && data.platform.size() >= 1 && data.platform.size() <= 40 &&
+             data.topic is string && data.topic.size() >= 1 && data.topic.size() <= 200 &&
+             data.content is string && data.content.size() >= 1 && data.content.size() <= 15000;
+    }
+
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false;
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       incoming().userId == userId &&
+                       incoming().keys().hasAll([
+                         'userId', 'displayName', 'tier', 'dailyAiQuotaUsed',
+                         'dailyAiQuotaLimit', 'autoDeleteCache', 'preferredColorGrade',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'displayName', 'email', 'photoUrl', 'tier',
+                         'dailyAiQuotaUsed', 'dailyAiQuotaLimit', 'autoDeleteCache',
+                         'preferredColorGrade', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       isValidUserProfile(incoming());
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'displayName', 'email', 'photoUrl', 'tier',
+                         'dailyAiQuotaUsed', 'autoDeleteCache', 'preferredColorGrade', 'updatedAt'
+                       ]);
+
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      match /studioProjects/{projectId} {
+        allow get: if isOwner(userId) && isValidId(projectId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(projectId) &&
+                         incoming().userId == userId &&
+                         incoming().keys().hasAll([
+                           'userId', 'toolId', 'title', 'prompt', 'aiOutput',
+                           'presetTag', 'status', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'toolId', 'title', 'prompt', 'aiOutput',
+                           'presetTag', 'status', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                         incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                         isValidStudioProject(incoming());
+
+        allow update: if isOwner(userId) &&
+                         isValidId(projectId) &&
+                         isValidStudioProject(incoming()) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'title', 'prompt', 'aiOutput', 'presetTag', 'status', 'updatedAt'
+                         ]);
+
+        allow delete: if isOwner(userId) && isValidId(projectId);
+      }
+
+      match /downloadTasks/{taskId} {
+        allow get: if isOwner(userId) && isValidId(taskId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(taskId) &&
+                         incoming().userId == userId &&
+                         incoming().keys().hasAll([
+                           'userId', 'url', 'platform', 'title', 'format',
+                           'muxingMode', 'status', 'aiSummary', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'url', 'platform', 'title', 'format',
+                           'muxingMode', 'status', 'aiSummary', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                         incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                         isValidDownloadTask(incoming());
+
+        allow update: if isOwner(userId) &&
+                         isValidId(taskId) &&
+                         isValidDownloadTask(incoming()) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'title', 'format', 'muxingMode', 'status', 'aiSummary', 'updatedAt'
+                         ]);
+
+        allow delete: if isOwner(userId) && isValidId(taskId);
+      }
+
+      match /chatMessages/{messageId} {
+        allow get: if isOwner(userId) && isValidId(messageId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(messageId) &&
+                         incoming().userId == userId &&
+                         incoming().keys().hasAll([
+                           'userId', 'platform', 'role', 'content', 'createdAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'platform', 'role', 'content', 'createdAt'
+                         ]) &&
+                         incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                         isValidChatMessage(incoming());
+
+        allow update: if false;
+        allow delete: if isOwner(userId) && isValidId(messageId);
+      }
+
+      match /creatorAssets/{assetId} {
+        allow get: if isOwner(userId) && isValidId(assetId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(assetId) &&
+                         incoming().userId == userId &&
+                         incoming().keys().hasAll([
+                           'userId', 'assetType', 'platform', 'topic', 'content', 'createdAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'assetType', 'platform', 'topic', 'content', 'createdAt'
+                         ]) &&
+                         incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                         isValidCreatorAsset(incoming());
+
+        allow update: if false;
+        allow delete: if isOwner(userId) && isValidId(assetId);
+      }
+    }
+  }
+}
